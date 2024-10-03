@@ -1,0 +1,116 @@
+#include <Keypad.h>              // Library for Keypad
+#include <Wire.h>                // Library for I2C communication
+#include <LiquidCrystal_I2C.h>   // Library for LCD I2C
+#include <Servo.h>               // Library for Servo
+
+// Keypad setup
+const byte ROWS = 4;  // Four rows
+const byte COLS = 4;  // Four columns
+char keys[ROWS][COLS] = {
+  {'1','2','3','A'},
+  {'4','5','6','B'},
+  {'7','8','9','C'},
+  {'*','0','#','D'}
+};
+
+byte rowPins[ROWS] = {9, 8, 7, 6};   // Connect to row pins of the keypad
+byte colPins[COLS] = {5, 4, 3, 2};   // Connect to column pins of the keypad
+
+Keypad keypad = Keypad( makeKeymap(keys), rowPins, colPins, ROWS, COLS );
+
+// LCD setup (using I2C)
+LiquidCrystal_I2C lcd(0x27, 16, 2);  // Set the LCD address to 0x27 for a 16 chars and 2 line display
+
+// Servo motor setup
+Servo doorServo;
+
+// Pin assignments
+#define SERVO_PIN 10   // Servo motor pin
+#define BUZZER_PIN 11  // Buzzer pin
+#define LED_PIN 12     // LED pin (to indicate door status)
+
+// Define password
+String password = "1234";
+String inputPassword = "";
+
+// Variables to manage the door
+bool isLocked = true;
+
+void setup() {
+  lcd.init();                // Initialize the LCD
+  lcd.backlight();           // Turn on LCD backlight
+  lcd.setCursor(0,0);
+  lcd.print("Enter Password:");
+
+  pinMode(BUZZER_PIN, OUTPUT);  // Set buzzer as output
+  pinMode(LED_PIN, OUTPUT);     // Set LED as output
+  digitalWrite(LED_PIN, HIGH);  // LED is on (door is locked)
+
+  doorServo.attach(SERVO_PIN);  // Attach servo to pin
+  lockDoor();                   // Initially lock the door
+
+  Serial.begin(9600);           // Start serial communication
+}
+
+void loop() {
+  char key = keypad.getKey();  // Read the pressed key from keypad
+
+  if (key) {
+    if (key == '#') {  // '#' used to submit the password
+      checkPassword();
+    } 
+    else if (key == '*') {  // '*' used to clear the entered password
+      inputPassword = "";
+      lcd.clear();
+      lcd.setCursor(0,0);
+      lcd.print("Enter Password:");
+    } 
+    else {
+      inputPassword += key;  // Append the pressed key to the input password
+      lcd.setCursor(0, 1);
+      lcd.print(inputPassword);
+    }
+  }
+}
+
+void checkPassword() {
+  if (inputPassword == password) {
+    lcd.clear();
+    lcd.setCursor(0,0);
+    lcd.print("Access Granted!");
+    unlockDoor();  // Unlock the door
+    delay(3000);   // Keep the door unlocked for 3 seconds
+    lockDoor();    // Lock the door again
+  } else {
+    lcd.clear();
+    lcd.setCursor(0,0);
+    lcd.print("Wrong Password");
+    triggerAlarm();  // Trigger alarm for incorrect password
+    delay(2000);
+  }
+
+  inputPassword = "";  // Clear the input password
+  lcd.clear();
+  lcd.setCursor(0,0);
+  lcd.print("Enter Password:");
+}
+
+void lockDoor() {
+  doorServo.write(0);     // Rotate servo to 0 degrees to lock the door
+  digitalWrite(LED_PIN, HIGH);  // Turn on LED (indicating locked)
+  isLocked = true;
+  Serial.println("Door Locked");
+}
+
+void unlockDoor() {
+  doorServo.write(90);    // Rotate servo to 90 degrees to unlock the door
+  digitalWrite(LED_PIN, LOW);   // Turn off LED (indicating unlocked)
+  isLocked = false;
+  Serial.println("Door Unlocked");
+}
+
+void triggerAlarm() {
+  digitalWrite(BUZZER_PIN, HIGH);  // Activate buzzer
+  delay(500);                      // Buzzer on for 500 ms
+  digitalWrite(BUZZER_PIN, LOW);   // Turn off buzzer
+}
